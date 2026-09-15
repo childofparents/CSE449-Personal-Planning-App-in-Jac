@@ -60,7 +60,6 @@ def _state() -> Planner {
 def _ok(data: any) -> dict {
     return {"ok": True, "data": data, "error": None};
 }
-
 def _error(code: str, message: str, details: any = None) -> dict {
     return {
         "ok": False,
@@ -72,7 +71,6 @@ def _error(code: str, message: str, details: any = None) -> dict {
 def _revision(record: dict, expected: int) -> bool {
     return record["revision"] == expected;
 }
-
 def _now() -> str {
     return dt.datetime.now(dt.timezone.utc).isoformat();
 }
@@ -675,7 +673,6 @@ def _read_days(day: str, count: int) -> dict {
 def get_day(day: str) -> dict {
     return _read_days(day, 1);
 }
-
 def get_week(day: str) -> dict {
     try {
         date = _date(day);
