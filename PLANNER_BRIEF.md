@@ -52,8 +52,9 @@ User-provided details:
 - Budget approximately 150 minutes total: 30 minutes round-trip travel,
   90 minutes training, and 30 minutes showering/getting ready.
 - Monday-Thursday: usually arrive around 9:00 AM and leave around 10:45 AM.
-- Tuesday/Thursday: the gym is on central campus. Go directly from the gym to
-  AAS 254, approximately a 10-minute walk; do not insert a trip home.
+- Choose Hadley Rec Center (Central Campus) or NCRB (North Campus) per weekday visit.
+- On Hadley Tuesday/Thursday visits, walk directly to AHB for AAS 254, approximately
+  10 minutes; do not insert a trip home. NCRB routes need separately supplied travel times.
 - Friday: depart AAS 254 discussion at 9:50 AM and arrive at the gym around
   10:00 AM; this trip starts at class, not home.
 
@@ -67,7 +68,7 @@ Proposed initial reservations (editable defaults, not user-confirmed exact times
   reserving the full 150-minute budget. The usual 10:45 departure plus an assumed
   15-minute return leaves 15 minutes of slack within that reservation.
 - Tuesday/Thursday: retain the approximate 9:00 AM gym arrival and usual
-  10:45 AM departure. Walk to AAS 254 from 10:45-10:55 AM, leaving approximately
+  10:45 AM departure. Walk to AHB from 10:45-10:55 AM, leaving approximately
   35 minutes before the 11:30 AM lecture. A 15-minute home-to-gym trip is still
   only an assumption. Keep the 150-minute gym budget as a planning preference,
   not a reason to invent return-home travel or fill the remaining time.
@@ -82,10 +83,13 @@ time so it changes with the day's route.
 
 ## Restaurant work commitment
 
-Work recurs approximately two days per week, but the weekdays and shift times
+Work recurs approximately two days per week, but the days (including weekends) and shift times
 vary. The manager publishes the following week's shift schedule on Friday.
 Until then, mark that week's work schedule as awaiting publication; do not assume
-fixed weekdays, invent shift times, or copy the previous week's shifts forward.
+fixed days, automatically schedule default times, or copy the previous week's shifts forward.
+
+New shift forms default to 16:30–21:00 (editable), at Evergreen Plymouth
+(2771 Plymouth Rd, Ann Arbor, MI 48105). Typical shifts last about 4–4.5 hours.
 
 Once published, enter each shift as a dated commitment with its actual start and
 end times, then check conflicts with classes, gym, travel, and other plans.
@@ -129,6 +133,7 @@ publish or submit work now.
 
 ## Current progress
 
-`learning/task_basics.jac` demonstrates an in-memory task and completion state.
-It is a learning exercise, not yet the application. This brief records the next
-design step; persistence, scheduling, and the four interfaces remain to build.
+`learning/task_basics.jac` remains an in-memory learning exercise. The server is
+now implemented in `core/`, with persistent per-user planning data, scheduling,
+recurrence exceptions, and authenticated HTTP operations. See `README.md` for
+setup and tests. Web, mobile, and CLI remain to build.

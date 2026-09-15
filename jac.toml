@@ -1,0 +1,27 @@
+[project]
+name = "personal-planner"
+version = "0.1.0"
+default-app = "web"
+
+[apps.planner]
+kind = "service"
+entry-point = "core.planner"
+
+[serve]
+host = "127.0.0.1"
+port = 8000
+
+[apps.web]
+kind = "web-app"
+entry-point = "web.main"
+
+[apps.web.dependencies.npm]
+jac-client-node = "1.0.7"
+
+[apps.web.dependencies.npm.dev]
+"@jac-client/dev-deps" = "1.0.0"
+
+[dependencies.npm]
+luxon = "3.7.2"
+lucide-react = "1.46.0"
+"@googlemaps/js-api-loader" = "2.1.1"

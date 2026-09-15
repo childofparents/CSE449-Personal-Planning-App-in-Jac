@@ -1,6 +1,8 @@
 # Four-component feature plan
 
-Status: proposed implementation design; these features are not implemented yet.
+Status: server implemented in `core/` (September 12, 2026); web, mobile, and CLI
+remain planned. See [README.md](README.md) for the running API and tested behavior.
+The remaining sections preserve the broader component design.
 Personal schedule and confirmed preferences: [PLANNER_BRIEF.md](PLANNER_BRIEF.md).
 
 ## Product workflow
@@ -34,8 +36,8 @@ the web calendar. Select the device platform before its packaging milestone.
 - Classes and fixed events occupy time but need not be completed like tasks.
 - Gym is required each weekday; an individual reservation may move. Show planned
   gym coverage separately from completed gym visits.
-- Travel has an origin, destination, and duration. Tuesday/Thursday gym-to-AAS
-  takes 10 minutes; Friday discussion-to-gym follows the user's stated routine.
+- Travel has an origin, destination, and duration. Tuesday/Thursday Hadley-to-AHB
+  takes 10 minutes; NCRB visits need their own route times; Friday discussion-to-gym follows the user's stated routine.
   Unknown routes remain unset or visibly estimated, never silently zero.
 - Store instants consistently and render in America/Detroit; expand weekly
   recurrence in local time so daylight saving changes preserve class clock times.

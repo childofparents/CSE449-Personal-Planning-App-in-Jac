@@ -3,3 +3,6 @@ name = "planner-learning"
 version = "0.1.0"
 kind = "cli"
 entry-point = "task_basics"
+
+[dependencies]
+"byllm[local]" = ">=0.0.0"
