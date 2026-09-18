@@ -1,7 +1,7 @@
 # Four-component feature plan
 
-Status: server implemented in `core/` (September 12, 2026); web, mobile, and CLI
-remain planned. See [README.md](README.md) for the running API and tested behavior.
+Status (September 17, 2026): server, web, and native mobile screens are implemented.
+Mobile iOS/Android JavaScript bundles compile; device packaging/testing and CLI remain. See [README.md](README.md) for the running API and tested behavior.
 The remaining sections preserve the broader component design.
 Personal schedule and confirmed preferences: [PLANNER_BRIEF.md](PLANNER_BRIEF.md).
 
@@ -79,7 +79,7 @@ response asks the client to reload; it does not claim the change was saved.
 
 ## Integration and synchronization
 
-Web, mobile, and CLI call public Jac service functions/walkers. The service owns
+Web and mobile call authenticated Jac REST functions; the planned CLI will use the same API. The service owns
 graph nodes; boundary objects/enums carry response data to consumers. Importing
 the same local helper in two apps does not share runtime state or persistence.
 

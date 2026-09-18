@@ -26,20 +26,12 @@ import from "lucide-react" {
     Check,
     Coffee
 }
+import from ..shared.planning { today, monday, shift, label, clock, stamp, minute, previewWeek, previewTasks }
+import from ..shared.http { request }
 import from .support {
-    today,
-    monday,
-    shift,
-    label,
-    clock,
-    stamp,
-    minute,
     tone,
     uid,
     api,
-    request,
-    previewWeek,
-    previewTasks,
     eventStyle,
     calendarBounds,
     trapFocus

@@ -1,13 +1,9 @@
 # CSE449-F26 Assignment 1: Personal Planning App in Jac
 ## Beini Lan | UMID: 12374752
 
-# A Personal Planning App Developed in Jac
-Cadence balances semester classes, daily tasks, gym, travel, social plans, and on-call restaurant shifts in a weekly planning dashboard. Built in Jac.
+# Cadence - A Personal Planning App Developed in Jac
 
-
-# Cadence — web dashboard for personal planning
-
-A Jac planning service for my Fall 2026 classes, work shifts, tasks, gym, travel, and personal/social activities. The authenticated server and web dashboard are implemented; mobile and CLI interfaces remain future components. No AI API key is needed.
+A Jac planning service for my Fall 2026 classes, work shifts, tasks, gym, travel, and personal/social activities. The authenticated server, web dashboard, and native mobile interface are implemented; CLI remains a future component. No AI API key is needed.
 
 ## Run
 
@@ -35,7 +31,7 @@ For a backup, stop the server and copy the project together with its `.jac/` dir
 An external PostgreSQL database can instead be configured with `JAC_DB_URL`.
 Runtime data and local credentials are gitignored.
 
-The default binding is localhost. Before enabling access from other devices, configure deployment authentication/TLS and change Jac's bootstrap admin password in its admin portal. A phone will eventually use the computer's reachable address.
+The default binding is localhost. Before enabling access from other devices, configure deployment authentication/TLS and change Jac's bootstrap admin password in its admin portal. A phone uses the computer's reachable address as described below.
 
 ## Web dashboard
 
@@ -64,11 +60,9 @@ resets preview blocks. They are never copied into a signed-in account.
 - Event locations offer Google Places suggestions and a map beside event details when configured below.
   Selected place IDs persist on the server; manually changing the address clears an outdated ID.
 - Refresh to fetch changes from other interfaces. Live push updates, drag-and-drop,
-  automatic scheduling, notifications, and mobile/CLI apps are not implemented.
+  automatic scheduling, notifications, and the CLI are not implemented.
 
-`web/main.jac` contains the reactive interface and forms; `web/support.jac` handles
-client date formatting, clearly separated preview fixtures, and authenticated REST
-calls; `web/global.css` contains responsive styling; `web/locations.jac` handles Google Places and map previews. All stored planning logic
+`web/main.jac` contains the reactive interface and forms; `web/support.jac` handles web helpers and authenticated REST calls; `shared/` contains date formatting, preview fixtures, and JSON transport; `web/global.css` contains responsive styling; `web/locations.jac` handles Google Places and map previews. All stored planning logic
 remains in `core/`. No anonymous planner endpoints were introduced.
 
 Design inspiration: [Routine](https://routine.co/) for the task-and-calendar workspace
@@ -80,6 +74,86 @@ Check/build the web app:
 jac check --app web
 jac build --as client web
 ```
+
+## Mobile app — iOS and Android
+
+`mobile/main.jac` is a native Jac **mobUI / React Native (Expo)** app, with a browser preview through React Native Web. It uses the same violet, mint, peach, blue, and gray category palette as the web dashboard, with touch-sized controls, bottom navigation, keyboard-aware forms, and a daily agenda instead of squeezed calendar columns.
+
+Implemented workflows:
+
+- Browse all seven days, move between weeks, jump to today, and filter categories.
+- View classes, gym, travel, social plans, personal events, and restaurant shifts.
+- Create/edit tasks, search the inbox, complete/reopen tasks, and schedule task sessions. Searching tasks does not filter the agenda.
+- Create and move events; moving a class changes one occurrence. Conflicts and stale revisions keep the form open.
+- Add weekday or weekend shifts with editable 16:30–21:00 defaults at Evergreen Plymouth; mark a week's schedule published.
+- Pick Hadley or NCRB, enter manual locations, open Google Maps, and optionally search Google Places with a map preview in event details.
+- Sign in/register against the same planner service as web. Native tokens use Expo SecureStore; the browser preview uses tab sessionStorage. Passwords are never saved.
+- Pull to refresh on native, or tap Refresh, to load changes from other interfaces. Preview edits are temporary; authenticated writes persist on the server. Offline editing and push synchronization are not implemented.
+
+### Browser preview (no phone required)
+
+From the repository root:
+
+```sh
+jac install
+jac run --platform web --port 8120 mobile
+```
+
+Open [http://localhost:8120](http://localhost:8120). This runs the mobile screens with a colocated planner service. In **Account**, use the default server URL for this preview, or enter the URL of your already running planner and sign in with the same account. To edit with hot reload, use `jac run --dev --platform web --port 8120 mobile` **instead**. Jac 0.37.14 shares generated Vite configuration between apps: run only one Vite development frontend at a time; stop it before switching between web and mobile development. A static mobile preview can be used alongside web.
+
+### Phone / simulator development
+
+Prerequisites: Jac 0.37.14, Python 3 for the metadata helper, a phone with an Expo Go version compatible with the generated Expo SDK (currently 57), or an iOS simulator / Android emulator. Jac setup downloads the native dependencies. Local iOS builds require macOS with full Xcode and its simulator tools; Android builds require an Android SDK/emulator and the Java toolchain supported by the generated Expo project. See the [Jac native target guide](https://docs.jaseci.org/reference/plugins/jac-client/) and [Expo development setup](https://docs.expo.dev/get-started/set-up-your-environment/).
+
+```sh
+jac setup mobile
+python3 tools/configure_mobile.py
+jac setup mobile
+jac run --dev mobile
+```
+
+The helper applies Cadence's display name and native identifiers and synchronizes Luxon, because Jac preserves existing generated package metadata. The second setup installs that dependency. Re-run this sequence after regenerating `.jac/mobile-rn`; do not delete the project's database to rebuild the app. The native launcher starts Metro on port 8081 and also attempts the selected platform build (Android by default). Before the Android workflow, review and accept its SDK license interactively with `jac setup --toolchain android`, then configure an emulator/device. For iOS, use `jac run --dev --platform ios mobile` with full Xcode installed. Scan Metro's QR code using Expo Go, or use the displayed emulator/simulator controls. Use a development build if Expo Go does not support the generated SDK.
+
+The mobile **Account → Planner server URL** must point to the shared running service. `localhost` on a physical phone means the phone itself. For local testing, put the computer and phone on the same trusted Wi-Fi network and run the planner in another terminal:
+
+```sh
+jac run --host 0.0.0.0 --port 8129 planner
+```
+
+Enter `http://YOUR_COMPUTER_LAN_IP:8129` on the phone. Use the same project/database and account as web. On an Android emulator, the host machine is usually `10.0.2.2`; an iOS simulator can use `127.0.0.1`. Use HTTPS for a deployed service. The phone needs connectivity to both Metro and the API during development.
+
+In the app: **My week** opens your daily agenda; choose a day and tap **Create event** or an existing block. **Tasks** provides capture, search, completion, and session scheduling. **Account** manages connection/sign-in. Pull to refresh after editing on web. Restaurant shifts have their own quick-add and publication controls below the agenda.
+
+Native packaging commands (platform toolchains required):
+
+```sh
+jac build --platform android mobile
+jac build --platform ios mobile
+```
+
+Verification: the mobile browser build and iOS/Android Hermes JavaScript exports compile. A signed IPA/APK and physical-device interaction have **not** been verified. Metro startup was verified. On this Mac, full Xcode is unavailable and Android setup stops pending the user's SDK license acceptance, and Jac 0.37.14's bundled Bun/Expo iOS prebuild also reports an Xcode project parsing error. This is a packaging limitation, not a completed device build. The UI can be exercised now through the browser preview; finish device smoke tests before distribution. Avoid native builds while the mobile browser dev server is running, since Jac reuses generated module paths for platform variants.
+
+### Optional mobile Google Places and map thumbnails
+
+The native app uses authenticated server endpoints rather than exposing a server key in the app. Enable **Places API (New)** and **Maps Static API** on a billed Google Cloud project and set a separate server key in the terminal that runs the planner:
+
+```sh
+export GOOGLE_MAPS_SERVER_API_KEY='YOUR_SERVER_KEY'
+jac run --host 0.0.0.0 --port 8129 planner
+```
+
+Restrict this key to those APIs and your server's outbound IP where applicable. Do not put it in source control or frontend build settings. The existing web dashboard's referrer-restricted browser key is configured separately below. Mobile search starts after three characters and requires sign-in; selecting a match saves its place ID and loads a thumbnail. Without configuration, manual locations and Open Maps still work. Live billed Google responses have not been tested. See [Places autocomplete](https://developers.google.com/maps/documentation/places/web-service/place-autocomplete) and [Maps Static](https://developers.google.com/maps/documentation/maps-static/start).
+
+### How the components fit together
+
+| Component | Responsibility / status |
+| --- | --- |
+| Server | Implemented: authenticated per-user persistence, recurring classes, scheduling conflicts, revisions, shifts, and optional location proxy |
+| Web | Implemented: weekly planning and review |
+| Mobile | Implemented: native daily planning/capture screens and shared API; device packaging/testing remains |
+| CLI | Planned: terminal capture/query/completion against the same REST service |
+
+`shared/planning.jac` shares Detroit date helpers and explicit preview fixtures; `shared/http.jac` shares JSON transport. Neither client owns a separate planner database. Server validation remains authoritative. See [AI_FEATURES.md](AI_FEATURES.md) for proposed AI additions and a demonstration across all four interfaces. AI features are ideas, not enabled functionality.
 
 ## Google location search and map setup (optional)
 
@@ -205,4 +279,4 @@ python3 -m unittest discover -s tests -v
 
 Tests use only Python's standard library plus Jac. They launch an isolated temporary project/database and test real HTTP authentication, isolation, recurrence/DST, overlaps, atomic travel moves, revisions, concurrent writes, work publication, and persistence after stopping/restarting the server.
 
-The remaining assignment milestones are the mobile app and CLI. Root `jac run` starts the implemented web UI and service.
+The remaining assignment milestones are native device verification and the CLI. Root `jac run` starts the implemented web UI and service.

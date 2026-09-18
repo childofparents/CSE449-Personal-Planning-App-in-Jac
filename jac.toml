@@ -25,3 +25,28 @@ jac-client-node = "1.0.7"
 luxon = "3.7.2"
 lucide-react = "1.46.0"
 "@googlemaps/js-api-loader" = "2.1.1"
+
+[dependencies.npm.native]
+luxon = "3.7.2"
+
+[apps.mobile]
+kind = "mobile"
+entry-point = "mobile.main"
+
+[apps.mobile.dependencies.npm]
+react-native-safe-area-context = "~5.7.0"
+react = "19.2.3"
+react-dom = "19.2.3"
+react-native-web = "0.21.2"
+react-native-svg = "^15.13.0"
+lucide-react = "^0.469.0"
+lucide-react-native = "^0.469.0"
+
+[apps.mobile.dependencies.npm.native]
+luxon = "3.7.2"
+react-native-svg = "^15.13.0"
+lucide-react-native = "^0.469.0"
+
+[apps.mobile.placement.pins]
+"mobile.*" = "client"
+"shared.*" = "client"

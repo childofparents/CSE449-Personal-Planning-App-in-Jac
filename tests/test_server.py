@@ -41,6 +41,7 @@ class ServerTests(unittest.TestCase):
         env = os.environ.copy()
         # Never attach an isolated test project to a user's external database.
         env.pop("JAC_DB_URL", None)
+        env.pop("GOOGLE_MAPS_SERVER_API_KEY", None)
         cls.process = subprocess.Popen(
             ["jac", "run", "--port", str(cls.port), "--host", "127.0.0.1", "planner"],
             cwd=cls.project, stdout=cls.log, stderr=cls.log, env=env,
@@ -279,14 +280,23 @@ class ServerTests(unittest.TestCase):
         with urllib.request.urlopen(self.base + "/openapi.json") as response:
             paths = json.load(response)["paths"]
         endpoints = [p for p in paths if p.startswith("/function/") and "{" not in p]
-        self.assertEqual(len(endpoints), 17, endpoints)
+        self.assertEqual(len(endpoints), 20, endpoints)
         self.assertFalse(any(p.endswith(("/uuid4", "/deepcopy")) for p in endpoints))
-        valid = dict(day="2026-09-14", title="Test", start="2026-09-14T20:00:00-04:00",
+        valid = dict(query="Hadley", session_token="qa-session", place_id="test-place", day="2026-09-14", title="Test", start="2026-09-14T20:00:00-04:00",
                      end="2026-09-14T21:00:00-04:00", task_id="unknown", block_id="unknown",
                      expected_revision=1, changes={"title": "Test"}, series_id="eecs449",
                      occurrence_date="2026-09-14", action="cancel", week_start="2026-09-14", published=True)
         for path in endpoints:
             self.assertEqual(self.post(path, valid)[0], 401, path)
+
+    def test_mobile_places_are_optional_and_validate_inputs(self):
+        missing = self.bad("validation", "search_places", query="Hadley", session_token="qa-session")
+        self.assertIn("not configured", missing["message"])
+        self.bad("validation", "search_places", query="a", session_token="qa-session")
+        self.bad("validation", "select_place", place_id="../escape", session_token="qa-session")
+        self.bad("validation", "place_map", place_id="https://example.com")
+        task = self.good("create_task", title="Planner still works without Google")
+        self.assertEqual(task["title"], "Planner still works without Google")
 
     def test_z_persistence_after_server_restart(self):
         task = self.good("create_task", title="Survives restart")

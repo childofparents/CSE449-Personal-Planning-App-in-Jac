@@ -1,5 +1,6 @@
 """Authenticated planning API. Clients use POST /function/<operation>."""
 import datetime as dt;
+import from .places { _search, _select, _map }
 import from uuid { uuid4 as _uuid4 }
 import from copy { deepcopy as _deepcopy }
 import from .models { Planner, _preferences, _classes }
@@ -718,4 +719,21 @@ def _travel_verified(block: dict, daily: list) -> bool {
         return True;
     }
     return False;
+}
+
+# Authenticated optional place APIs shared with the native client.
+def search_places(query: str, session_token: str) -> dict {
+    try { return _ok(_search(query, session_token)); }
+    except ValueError as e { return _error("validation",str(e)); }
+    except Exception { return _error("places_unavailable","Google search is unavailable. Enter a location manually."); }
+}
+def select_place(place_id: str, session_token: str) -> dict {
+    try { return _ok(_select(place_id, session_token)); }
+    except ValueError as e { return _error("validation",str(e)); }
+    except Exception { return _error("places_unavailable","Google place details are unavailable."); }
+}
+def place_map(place_id: str) -> dict {
+    try { return _ok(_map(place_id)); }
+    except ValueError as e { return _error("validation",str(e)); }
+    except Exception { return _error("places_unavailable","Google map is unavailable. Open the location in Maps instead."); }
 }
