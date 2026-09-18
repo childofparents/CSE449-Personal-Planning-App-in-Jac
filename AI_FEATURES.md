@@ -2,11 +2,10 @@
 
 These features are proposed, not implemented. The current planner needs no AI key.
 
-## Best first additions
-
-1. **Friday shift screenshot import.** Photograph the manager's next-week schedule. Extract only your shifts, ask which week/name ambiguous entries refer to, and show editable dates/times before saving. Default Evergreen Plymouth, support weekends, and never convert “about two shifts” into invented dates. This solves a recurring problem specific to this planner.
+# TO BE IMPLEMENTED
+1. **Friday shift screenshot import.** Screenshot the published next-week schedule in an email or from the Homebase app. Extract only your shifts, ask which week/name ambiguous entries refer to, and show editable dates/times before saving. Default Evergreen Plymouth, support weekends, and never convert “about two shifts” into invented dates. This solves a recurring problem specific to this planner.
 2. **Natural-language quick capture.** Type or dictate “Study for 45 minutes Saturday morning” or “Trivia Thursday at 7.” Return a task or proposed event with explicit duration, timezone, and location candidates. Ask about missing information instead of silently guessing. Voice permissions and transcription would be a separate opt-in capability.
-3. **Explainable replanning after shifts arrive.** Suggest moving flexible work around confirmed shifts while protecting classes, weekday gym, travel, and free time. Show a before/after diff and explain every move. Confirm the full plan before writing; a transactional batch endpoint and stale-revision checks must be built first.
+
 
 ## Other useful mobile features
 
@@ -17,7 +16,7 @@ These features are proposed, not implemented. The current planner needs no AI ke
 | Assignment breakdown | Split a project into small, editable work sessions | User's deadline, estimated effort, available gaps; estimates labelled as estimates |
 | “What fits now?” | Offer one task that fits a 35-minute gap | Actual upcoming events, travel buffer, task duration and preferences |
 | Daily briefing | Explain today's classes, gym, shift, and one achievable priority | Saved agenda with event IDs; avoid inventing commitments |
-| Schedule questions | “Can I attend trivia after my shift Friday?” | Actual published shift, event time, travel requirement and server conflict checks |
+| Schedule review | “Can I attend trivia after my shift Friday?” | Actual published shift, event time, travel requirement and server conflict checks |
 | Weekly balance reflection | Compare planned gym, completed work, and unfilled time | Recorded completions; do not equate planned time with actual attendance |
 
 ## How all four components contribute
@@ -25,7 +24,7 @@ These features are proposed, not implemented. The current planner needs no AI ke
 - **Server:** owns AI calls, private provider credentials, authorized retrieval, timezone calculations, proposal validation, and persistence. One scheduling rule implementation serves all interfaces.
 - **Web:** shows a full-week comparison and lets you review/edit proposed changes.
 - **Mobile:** captures text/photos/voice and helps execute today's plan; every AI proposal is editable before confirmation.
-- **CLI (still planned):** queries the same saved plan, captures tasks quickly, and prints proposal/conflict details as text or JSON. It must call the running API rather than create another graph store.
+- **CLI:** queries the same saved plan, captures tasks quickly, and prints proposal/conflict details as text or JSON. It must call the running API rather than create another graph store.
 
 An impressive demonstration: import Friday's schedule on the phone → review proposed adjustments on web → accept the changes → inspect the same updated weekend from the CLI → complete a task on mobile and verify completion elsewhere after refresh.
 
