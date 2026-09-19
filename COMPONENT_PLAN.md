@@ -1,7 +1,7 @@
 # Four-component feature plan
 
-Status (September 17, 2026): server, web, and native mobile screens are implemented.
-Mobile iOS/Android JavaScript bundles compile; device packaging/testing and CLI remain. See [README.md](README.md) for the running API and tested behavior.
+Status (September 18, 2026): server, web, native mobile screens, and CLI are implemented.
+Mobile iOS/Android JavaScript bundles compile; installable packaging/device testing is deferred for a later extra-credit enhancement. See [README.md](README.md) for the running API and tested behavior.
 The remaining sections preserve the broader component design.
 Personal schedule and confirmed preferences: [PLANNER_BRIEF.md](PLANNER_BRIEF.md).
 
@@ -66,7 +66,7 @@ Names below are a design contract, not existing Jac commands or endpoints.
 
 | Operation | Purpose |
 | --- | --- |
-| `create_task`, `update_task`, `list_tasks`, `complete_task` | Manage task records; setting completed twice has the same result |
+| `create_task`, `update_task`, `list_tasks`, `complete_task`, `remove_task` | Manage task records; setting completed twice has the same result |
 | `get_day`, `get_week` | Return dated classes, task sessions, events, travel, and gym coverage |
 | `create_block`, `move_block`, `remove_block` | Save an interval or change it after authoritative validation |
 | `check_schedule` | Explain overlaps, missing travel information, and missing gym coverage |
@@ -79,7 +79,7 @@ response asks the client to reload; it does not claim the change was saved.
 
 ## Integration and synchronization
 
-Web and mobile call authenticated Jac REST functions; the planned CLI will use the same API. The service owns
+Web, mobile, and CLI call the same authenticated Jac REST functions. The service owns
 graph nodes; boundary objects/enums carry response data to consumers. Importing
 the same local helper in two apps does not share runtime state or persistence.
 
@@ -107,9 +107,7 @@ The installed Jac 0.37.11 `jac guide jac-apps` documents that `jac run web`
 colocates service apps; defaulting to web should meet the root `jac run` requirement.
 Verify generated configuration with `jac run --show` when scaffolding.
 
-CLI must reach the same running service as web/mobile, including when invoked
-from another process. Verify its bridge/base-URL configuration in the first
-integration milestone; do not accidentally create a separate CLI graph store.
+CLI reaches the same running service as web/mobile through its saved server origin or --server/CADENCE_SERVER. It imports no graph helpers and creates no independent planner store. See README for commands, JSON output, and authentication.
 A physical phone needs a reachable backend address, not the phone's localhost.
 
 ## Incremental build order and acceptance checks

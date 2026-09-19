@@ -32,3 +32,9 @@ html { font-size:17.6px; }
 .calendar-toolbar{flex-wrap:wrap}
 .calendar-controls{flex-wrap:wrap;justify-content:flex-end;row-gap:.5rem}
 .create-event{min-height:2.25rem;padding:.5rem .875rem;font-size:.6875rem;font-weight:600;white-space:nowrap;margin-left:.5rem;flex-shrink:0}
+
+.delete-actions{margin-top:1.25rem;padding-top:1rem;border-top:1px solid #eee4e7}
+.delete-actions p{font-size:.85rem;line-height:1.55;color:#6b4b54;margin:0 0 .8rem}
+.delete-buttons{display:flex;gap:.75rem;flex-wrap:wrap}
+.danger-button{color:#a23146;background:#fff0f2;border:1px solid #e6b9c3;border-radius:.55rem;padding:.65rem 1rem;font-size:.8rem;font-weight:600;min-height:42px}
+.danger-button:hover{background:#fce2e7}.danger-button:disabled{opacity:.5;cursor:wait}

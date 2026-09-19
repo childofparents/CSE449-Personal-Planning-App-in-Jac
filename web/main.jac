@@ -26,16 +26,19 @@ import from "lucide-react" {
     Check,
     Coffee
 }
-import from ..shared.planning { today, monday, shift, label, clock, stamp, minute, previewWeek, previewTasks }
-import from ..shared.http { request }
-import from .support {
-    tone,
-    uid,
-    api,
-    eventStyle,
-    calendarBounds,
-    trapFocus
+import from ..shared.planning {
+    today,
+    monday,
+    shift,
+    label,
+    clock,
+    stamp,
+    minute,
+    previewWeek,
+    previewTasks
 }
+import from ..shared.http { request }
+import from .support { tone, uid, api, eventStyle, calendarBounds, trapFocus }
 
 def:pub app() -> JsxElement {
     has selected: str = today(),
@@ -65,6 +68,7 @@ def:pub app() -> JsxElement {
         kind: str = "event",
         taskId: str = "",
         detail: any = None,
+        deleteTarget: str = "",
         origin: str = "",
         destination: str = "",
         navOpen: bool = False;
@@ -165,6 +169,7 @@ def:pub app() -> JsxElement {
             account = username;
             password = "";
             modal = "";
+            deleteTarget = "";
             await load(selected, auth);
         } except Exception as e {
             error = str(e);
@@ -318,6 +323,7 @@ def:pub app() -> JsxElement {
             }
             savedDate = day if modal == "block" else selected;
             modal = "";
+            deleteTarget = "";
             notice = "Saved to your planner"
                 if token
                 else "Added to this preview only. Sign in to save your plan.";
@@ -364,8 +370,95 @@ def:pub app() -> JsxElement {
             }
             await api(operation, payload, token);
             modal = "";
+            deleteTarget = "";
             notice = "Time block moved";
             await navigate(day);
+        } except Exception as e {
+            error = str(e);
+        } finally {
+            busy = False;
+        }
+    }
+    async def removeSelected() -> None {
+        if not detail or deleteTarget != detail.id {
+            return;
+        }
+        busy = True;
+        error = "";
+        try {
+            deletingTask = modal == "editTask";
+            if token {
+                if deletingTask {
+                    await api(
+                        "remove_task",
+                        {"task_id": detail.id, "expected_revision": detail.revision},
+                        token
+                    );
+                } elif detail.kind == "class" {
+                    await api(
+                        "set_occurrence_exception",
+                        {
+                            "series_id": detail.series_id,
+                            "occurrence_date": detail.occurrence_date,
+                            "expected_revision": detail.revision,
+                            "action": "cancel"
+                        },
+                        token
+                    );
+                } else {
+                    await api(
+                        "remove_block",
+                        {
+                            "block_id": detail.id,
+                            "expected_revision": detail.revision,
+                            "include_linked_travel": True
+                        },
+                        token
+                    );
+                }
+            } else {
+                if deletingTask {
+                    tasks = tasks.filter(lambda (t: any) { return t.id != detail.id; });
+                    week = {
+                        ** week,
+                        "days": week.days.map(
+                            lambda (d: any) { return {
+                                ** d,
+                                "blocks": d.blocks.map(
+                                    lambda (b: any) { return {** b, "task_id": ""}
+                                        if b.task_id == detail.id
+                                        else b; }
+                                )
+                            }; }
+                        )
+                    };
+                } else {
+                    week = {
+                        ** week,
+                        "days": week.days.map(
+                            lambda (d: any) { return {
+                                ** d,
+                                "blocks": d.blocks.filter(
+                                    lambda (b: any) { return b.id != detail.id
+                                        and b.linked_to != detail.id; }
+                                )
+                            }; }
+                        )
+                    };
+                }
+            }
+            modal = "";
+            deleteTarget = "";
+            notice = (
+                "Task deleted. Scheduled sessions remain on your calendar."
+                    if deletingTask
+                    else "Event removed from this date."
+            )
+                if token
+                else "Deleted from this preview only.";
+            if token {
+                await navigate(selected);
+            }
         } except Exception as e {
             error = str(e);
         } finally {
@@ -1084,6 +1177,7 @@ def:pub app() -> JsxElement {
             className="modal-backdrop"
             onClick={lambda (e: any) { if e.target == e.currentTarget and not busy {
                 modal = "";
+                deleteTarget = "";
             }}}
         >
             <section
@@ -1093,6 +1187,7 @@ def:pub app() -> JsxElement {
                 aria-labelledby="modal-title"
                 onKeyDown={lambda (e: any) { if e.key == "Escape" and not busy {
                     modal = "";
+                    deleteTarget = "";
                 } else {
                     trapFocus(e);
                 } }}
@@ -1101,7 +1196,10 @@ def:pub app() -> JsxElement {
                     className="modal-close"
                     aria-label="Close dialog"
                     disabled={busy}
-                    onClick={lambda { modal = ""; }}
+                    onClick={lambda {
+                        modal = "";
+                        deleteTarget = "";
+                    }}
                 >
                     <X size={20}/>
                 </button>
@@ -1443,6 +1541,50 @@ def:pub app() -> JsxElement {
                     <MapThumbnail location={location} placeId={placeId}/>
                 </div>
                     if modal == "detail"
+                    else None}
+                {<div className="delete-actions">
+                    {<div role="group" aria-label="Confirm deletion">
+                        <p>
+                            {"Delete this task permanently? Its scheduled sessions stay on the calendar as independent events."
+                                if modal == "editTask"
+                                else "Remove this class occurrence only? The rest of the series stays unchanged."
+                                    if detail.kind == "class"
+                                    else "Delete this event permanently? Any linked travel will also be deleted. The associated task stays in your inbox."}
+                        </p>
+                        <div className="delete-buttons">
+                            <button
+                                type="button"
+                                className="danger-button"
+                                disabled={busy}
+                                onClick={lambda { removeSelected(); }}
+                            >
+                                {"Deleting…" if busy else "Confirm delete"}
+                            </button>
+                            <button
+                                type="button"
+                                className="secondary"
+                                disabled={busy}
+                                onClick={lambda { deleteTarget = ""; }}
+                            >
+                                Keep it
+                            </button>
+                        </div>
+                    </div>
+                        if deleteTarget == detail.id
+                        else <button
+                            type="button"
+                            className="danger-button"
+                            disabled={busy}
+                            onClick={lambda { deleteTarget = detail.id; }}
+                        >
+                            {"Delete task"
+                                if modal == "editTask"
+                                else "Remove this occurrence"
+                                    if detail.kind == "class"
+                                    else "Delete event"}
+                        </button>}
+                </div>
+                    if detail and (modal == "editTask" or modal == "detail")
                     else None}
             </section>
         </div>

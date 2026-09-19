@@ -65,6 +65,7 @@ def:pub app() -> JsxElement {
         origin: str = "",
         destination: str = "",
         detail: any = None,
+        deleteTarget: str = "",
         suggestions: any = [],
         mapUri: str = "",
         placeError: str = "",
@@ -161,6 +162,7 @@ def:pub app() -> JsxElement {
         account = "";
         password = "";
         modal = "";
+        deleteTarget = "";
         week = previewWeek(selected);
         tasks = previewTasks();
         error = "";
@@ -170,6 +172,7 @@ def:pub app() -> JsxElement {
         clearTimeout(searchTimer);
         searchVersion += 1;
         modal = "";
+        deleteTarget = "";
         suggestions = [];
         searchBusy = False;
     }
@@ -297,7 +300,9 @@ def:pub app() -> JsxElement {
         } except Exception as e {
             placeError = str(e);
         }
-        if version != searchVersion { return; }
+        if version != searchVersion {
+            return;
+        }
         placeSession = str(Date.now()) + "-" + str(Math.random()).replace(".", "");
         await mapFor(place.id, version);
     }
@@ -468,6 +473,95 @@ def:pub app() -> JsxElement {
             busy = False;
         }
     }
+    async def removeSelected() -> None {
+        if not detail or deleteTarget != detail.id {
+            return;
+        }
+        busy = True;
+        error = "";
+        try {
+            deletingTask = modal == "task";
+            if token {
+                if deletingTask {
+                    await call(
+                        server,
+                        "remove_task",
+                        {"task_id": detail.id, "expected_revision": detail.revision},
+                        token
+                    );
+                } elif detail.kind == "class" {
+                    await call(
+                        server,
+                        "set_occurrence_exception",
+                        {
+                            "series_id": detail.series_id,
+                            "occurrence_date": detail.occurrence_date,
+                            "expected_revision": detail.revision,
+                            "action": "cancel"
+                        },
+                        token
+                    );
+                } else {
+                    await call(
+                        server,
+                        "remove_block",
+                        {
+                            "block_id": detail.id,
+                            "expected_revision": detail.revision,
+                            "include_linked_travel": True
+                        },
+                        token
+                    );
+                }
+            } else {
+                if deletingTask {
+                    tasks = tasks.filter(lambda (t: any) { return t.id != detail.id; });
+                    week = {
+                        ** week,
+                        "days": week.days.map(
+                            lambda (d: any) { return {
+                                ** d,
+                                "blocks": d.blocks.map(
+                                    lambda (b: any) { return {** b, "task_id": ""}
+                                        if b.task_id == detail.id
+                                        else b; }
+                                )
+                            }; }
+                        )
+                    };
+                } else {
+                    week = {
+                        ** week,
+                        "days": week.days.map(
+                            lambda (d: any) { return {
+                                ** d,
+                                "blocks": d.blocks.filter(
+                                    lambda (b: any) { return b.id != detail.id
+                                        and b.linked_to != detail.id; }
+                                )
+                            }; }
+                        )
+                    };
+                }
+            }
+            modal = "";
+            deleteTarget = "";
+            notice = (
+                "Task deleted. Scheduled sessions remain on your calendar."
+                    if deletingTask
+                    else "Event removed from this date."
+            )
+                if token
+                else "Deleted from this preview only.";
+            if token {
+                await load(selected, token, server);
+            }
+        } except Exception as e {
+            error = str(e);
+        } finally {
+            busy = False;
+        }
+    }
     async def complete(task: any) -> None {
         busy = True;
         error = "";
@@ -544,10 +638,13 @@ def:pub app() -> JsxElement {
     ];
     currentDay = week.days.find(lambda (d: any) { return d.date == selected; });
     dayBlocks: any = currentDay.blocks if currentDay else [];
-    blocks: any = sorted(dayBlocks.filter(
-        lambda (b: any) { return categoryFilter == "all"
-            or b.category == categoryFilter; }
-    ), key=lambda (b: any) { return dateOf(b.start).toMillis(); });
+    blocks: any = sorted(
+        dayBlocks.filter(
+            lambda (b: any) { return categoryFilter == "all"
+                or b.category == categoryFilter; }
+        ),
+        key=lambda (b: any) { return dateOf(b.start).toMillis(); }
+    );
     shownTasks = tasks.filter(
         lambda (t: any) { return (
             categoryFilter == "all" or t.category == categoryFilter
@@ -817,9 +914,14 @@ def:pub app() -> JsxElement {
                         {week.warnings.slice(0, 8).map(
                             lambda (w: any, i: int) { return
                                 <Text key={i} style={styles.muted}>
-                                    {w.message or ("Plan a gym visit" if w.code == "missing_gym" else "Check travel time" if w.code == "travel_unverified" else w.code.replace("_", " "))}{(" · " + w.date)
-                                        if w.date
-                                        else ""}
+                                    {w.message
+                                        or (
+                                            "Plan a gym visit"
+                                                if w.code == "missing_gym"
+                                                else "Check travel time"
+                                                    if w.code == "travel_unverified"
+                                                    else w.code.replace("_", " ")
+                                        )}{(" · " + w.date) if w.date else ""}
                                 </Text>; }
                         )}
                     </View>
@@ -915,7 +1017,9 @@ def:pub app() -> JsxElement {
                                             openForm("event");
                                             title = t.title;
                                             category = t.category;
-                                            kind = t.category if t.category in ["gym", "travel"] else "session";
+                                            kind = t.category
+                                                if t.category in ["gym", "travel"]
+                                                else "session";
                                             taskId = t.id;
                                             endTime = dateOf(
                                                 stamp(day, startTime)
@@ -1302,6 +1406,44 @@ def:pub app() -> JsxElement {
                                 disabled={busy}
                                 onPress={lambda { save(); }}
                             />
+                            {<View style={{"gap": 12, "paddingTop": 16}}>
+                                {<View style={{"gap": 12}}>
+                                    <Text style={styles.text}>
+                                        {"Delete this task permanently? Scheduled sessions stay on the calendar as independent events."
+                                            if modal == "task"
+                                            else "Remove this class occurrence only? The rest of the series stays unchanged."
+                                                if detail.kind == "class"
+                                                else "Delete this event permanently? Any linked travel will also be deleted. The associated task stays in your inbox."}
+                                    </Text>
+                                    <Button
+                                        label={"Deleting…"
+                                            if busy
+                                            else "Confirm delete"}
+                                        variant="danger"
+                                        disabled={busy}
+                                        onPress={lambda { removeSelected(); }}
+                                    />
+                                    <Button
+                                        label="Keep it"
+                                        variant="secondary"
+                                        disabled={busy}
+                                        onPress={lambda { deleteTarget = ""; }}
+                                    />
+                                </View>
+                                    if deleteTarget == detail.id
+                                    else <Button
+                                        label={"Delete task"
+                                            if modal == "task"
+                                            else "Remove this occurrence"
+                                                if detail.kind == "class"
+                                                else "Delete event"}
+                                        variant="danger"
+                                        disabled={busy}
+                                        onPress={lambda { deleteTarget = detail.id; }}
+                                    />}
+                            </View>
+                                if detail
+                                else <View/>}
                         </ScrollView>
                     </KeyboardAvoidingView>
                 </SafeFrame>

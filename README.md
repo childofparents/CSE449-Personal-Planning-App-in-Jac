@@ -3,7 +3,7 @@
 
 # Cadence - A Personal Planning App Developed in Jac
 
-A Jac planning service for my Fall 2026 classes, work shifts, tasks, gym, travel, and personal/social activities. The authenticated server, web dashboard, and native mobile interface are implemented; CLI remains a future component. No AI API key is needed.
+A Jac planning service for my Fall 2026 classes, work shifts, tasks, gym, travel, and personal/social activities. The authenticated server, web dashboard, mobile interface, and CLI are implemented. No AI API key is needed.
 
 ## Run
 
@@ -42,10 +42,11 @@ resets preview blocks. They are never copied into a signed-in account.
 - Sign in with your existing planner username/password, or create a local account.
   The session token is kept in this tab's `sessionStorage`; passwords are not stored.
 - Use **Create task**, click a task title to edit it, and check it off when complete.
+  In task details, **Delete task** removes it from both active and completed lists after confirmation. Scheduled sessions remain as independent events.
   The sidebar switches between the calendar, active tasks, and completed tasks.
 - Use **Schedule a session**, **Create event**, or an empty calendar slot.
   Dates/times are interpreted in America/Detroit, including daylight saving time.
-- Click a calendar block to inspect it or move it. Class moves affect one occurrence.
+- Click a calendar block to inspect, move, or **Delete event** after confirmation. Event deletion includes linked travel, but keeps the associated task. **Remove this occurrence** cancels just that class meeting. Class moves affect one occurrence.
   Server overlap/revision errors keep the form open and preserve its values.
 - Filter by category or search the task list. Task searches leave calendar events visible. Use arrows/Today to navigate and
   Workweek/7 days to switch views (all seven days are visible by default). The time axis expands for out-of-hours blocks;
@@ -60,7 +61,7 @@ resets preview blocks. They are never copied into a signed-in account.
 - Event locations offer Google Places suggestions and a map beside event details when configured below.
   Selected place IDs persist on the server; manually changing the address clears an outdated ID.
 - Refresh to fetch changes from other interfaces. Live push updates, drag-and-drop,
-  automatic scheduling, notifications, and the CLI are not implemented.
+  automatic scheduling, notifications are not implemented.
 
 `web/main.jac` contains the reactive interface and forms; `web/support.jac` handles web helpers and authenticated REST calls; `shared/` contains date formatting, preview fixtures, and JSON transport; `web/global.css` contains responsive styling; `web/locations.jac` handles Google Places and map previews. All stored planning logic
 remains in `core/`. No anonymous planner endpoints were introduced.
@@ -83,8 +84,8 @@ Implemented workflows:
 
 - Browse all seven days, move between weeks, jump to today, and filter categories.
 - View classes, gym, travel, social plans, personal events, and restaurant shifts.
-- Create/edit tasks, search the inbox, complete/reopen tasks, and schedule task sessions. Searching tasks does not filter the agenda.
-- Create and move events; moving a class changes one occurrence. Conflicts and stale revisions keep the form open.
+- Create/edit/delete tasks, search the inbox, complete/reopen tasks, and schedule task sessions. Searching tasks does not filter the agenda.
+- Create, move, and delete events from their details. Deletion requires confirmation; linked travel is removed with its event. Deleting a task preserves its sessions as independent events. Removing a class changes one occurrence. Conflicts and stale revisions keep the form open.
 - Add weekday or weekend shifts with editable 16:30–21:00 defaults at Evergreen Plymouth; mark a week's schedule published.
 - Pick Hadley or NCRB, enter manual locations, open Google Maps, and optionally search Google Places with a map preview in event details.
 - Sign in/register against the same planner service as web. Native tokens use Expo SecureStore; the browser preview uses tab sessionStorage. Passwords are never saved.
@@ -151,9 +152,78 @@ Restrict this key to those APIs and your server's outbound IP where applicable. 
 | Server | Implemented: authenticated per-user persistence, recurring classes, scheduling conflicts, revisions, shifts, and optional location proxy |
 | Web | Implemented: weekly planning and review |
 | Mobile | Implemented: native daily planning/capture screens and shared API; device packaging/testing remains |
-| CLI | Planned: terminal capture/query/completion against the same REST service |
+| CLI | Implemented: terminal task capture/edit/completion, scheduling, day/week previews, shift publication, and JSON output through the same REST service |
 
 `shared/planning.jac` shares Detroit date helpers and explicit preview fixtures; `shared/http.jac` shares JSON transport. Neither client owns a separate planner database. Server validation remains authoritative. See [AI_FEATURES.md](AI_FEATURES.md) for proposed AI additions and a demonstration across all four interfaces. AI features are ideas, not enabled functionality.
+
+## CLI — quick edits and week previews
+
+The Jac CLI component calls the **same running planner service** as web and mobile. It does not create another planner database. Start the server/web in one terminal with `jac run`; use the commands below from the repository root in another terminal. No extra packages or AI key are needed beyond the installed Jac CLI.
+
+```sh
+jac run cli -- --help
+jac run cli -- login YOUR_USERNAME
+jac run cli -- week
+jac run cli -- day
+```
+
+Create an account in web/mobile first. Login asks for a hidden password and saves only the token, account name, and server origin in `~/.config/cadence/session.json` with private file permissions (0600). `logout` removes this CLI session; web/mobile sessions are unchanged. `status` shows the configured connection without printing the token. `--password-stdin` is available for scripted login; do not put passwords in command-line arguments or committed scripts.
+
+Use `--server` **before the command** for a different server:
+
+```sh
+jac run cli -- --server http://127.0.0.1:8129 login YOUR_USERNAME
+jac run cli -- --json week 2026-09-21
+```
+
+Server precedence: `--server`, then `CADENCE_SERVER`, then the saved login origin, then `http://127.0.0.1:8000`. A saved token is used only for its original server. For automation, `CADENCE_TOKEN` supplies a token explicitly; pair it with `CADENCE_SERVER`. `CADENCE_CONFIG_DIR` overrides the private session directory. Never commit credentials. Use HTTPS for a remote server. Requests time out after 15 seconds and are never automatically retried, so check the saved plan before retrying an uncertain write.
+
+### Task capture and edits
+
+```sh
+jac run cli -- add "Finish Jac assignment" --category academics --minutes 60
+jac run cli -- tasks
+jac run cli -- tasks --search Jac --category academics
+jac run cli -- tasks --state done
+jac run cli -- tasks --state all
+jac run cli -- edit TASK_ID --title "Finish planner CLI" --minutes 45
+jac run cli -- done TASK_ID
+jac run cli -- reopen TASK_ID
+jac run cli -- delete task TASK_ID --yes
+jac run cli -- schedule TASK_ID --start 2026-09-21T17:30 --location "Library"
+```
+
+Replace `TASK_ID`/`EVENT_ID` with the IDs printed by the CLI. An unambiguous prefix is accepted; ambiguous or missing IDs fail without changing data. A scheduled task defaults to its stored duration unless `--end` is supplied. Gym tasks create gym blocks. Travel tasks need `--origin` and `--destination` when scheduled. Completing a task does not automatically mark its calendar sessions complete.
+
+### Calendar previews and quick changes
+
+```sh
+jac run cli -- week 2026-09-21
+jac run cli -- day 2026-09-22
+jac run cli -- check 2026-09-21
+jac run cli -- event "Gym at NCRB" --kind gym --start 2026-09-21T09:00 --end 2026-09-21T10:45 --location "NCRB"
+jac run cli -- event "Trivia with friends" --category social/campus --start 2026-09-24T19:00 --end 2026-09-24T20:30
+jac run cli -- move EVENT_ID --on 2026-09-21 --start 2026-09-21T18:00 --end 2026-09-21T19:00
+jac run cli -- delete event EVENT_ID --on 2026-09-21 --yes
+jac run cli -- shift 2026-09-26
+jac run cli -- shift 2026-09-27 --start 17:00 --end 21:30
+jac run cli -- work published 2026-09-26
+jac run cli -- work pending 2026-09-26
+```
+
+`week`/`check` show the Monday–Sunday week containing the date, including locations, full IDs, revisions, gym coverage, shift-publication status, and planning warnings. `day` defaults to today. Times display in **America/Detroit**. Dates/times without an offset are interpreted in Detroit; daylight-saving times that are missing or occur twice are rejected unless an unambiguous offset-aware timestamp is supplied. Overnight events need an explicit end date/time; shifts accept `--end-date`.
+
+`move --on` identifies the event's **current** week; `--start`/`--end` specify its new interval. Moving a recurring class changes only that occurrence. The server moves linked travel atomically, checks overlaps, and rejects unsupported route changes. `event --kind travel` supports `--origin`, `--destination`, `--linked-to`, and `--estimated`. Restaurant shifts always default to 16:30–21:00 at Evergreen Plymouth, can fall on weekends, and do not automatically publish the week's schedule.
+
+Edits, completion, moves, and publication commands fetch the current record revision before writing. Supply `--revision N` when you want to enforce a revision you previously reviewed. A stale revision or conflict is an error; it does not silently overwrite or retry. Task filtering/search never changes the calendar. `delete` requires `--yes`: task deletion preserves and detaches scheduled events, while event deletion includes linked travel and keeps its task. Class deletion cancels a single occurrence. Deletions persist across refresh/restart and cannot be undone through the current UI.
+
+### Output and integration
+
+`--json` emits one JSON object: `{ "ok": true, "data": ..., "error": null }`, or an error object with code/message/details. Success data contains `tasks`, `task`, `agenda`, `event`, `deleted`, or `work_week` depending on the command. Exit codes: **0** success, **1** authentication/network/planner/validation failure, **2** command syntax error (argparse help/error output). Without `--json`, failures go to stderr and agendas/tasks use readable text.
+
+Demo: create a task with `add`, refresh web to schedule it, complete it in mobile, then run `tasks --state done` to see the same saved record. Every CLI invocation fetches current server data; web/mobile need a refresh to see external changes. Native phone packaging is deferred as a separate extra-credit enhancement.
+
+Source: `cli/main.jac` defines commands; `cli/client.jac` handles authenticated HTTP and the private session; `cli/output.jac` handles terminal views and local-time input. No CLI module imports the server graph helpers.
 
 ## Google location search and map setup (optional)
 
@@ -236,7 +306,8 @@ conflicting IDs, titles, and UTC times. Runtime transaction contention can also 
 | `create_block` | `title`, `start`, `end`; optional category/kind/task_id/location/place_id/subtype/origin/destination/estimated/linked_to |
 | `move_block` | `block_id`, `expected_revision`, `start`, `end`, optional `location`/`place_id`; moves linked travel atomically |
 | `complete_block` | `block_id`, `expected_revision`, optional `completed` (true); task completion stays independent |
-| `remove_block` | `block_id`, `expected_revision`; remove linked travel first |
+| `remove_block` | `block_id`, `expected_revision`, optional `include_linked_travel` (false); true deletes linked travel atomically |
+| `remove_task` | `task_id`, `expected_revision`; deletes the task, preserving/detaching scheduled blocks and incrementing their revisions |
 | `get_day` | `day` as YYYY-MM-DD |
 | `get_week`, `check_schedule` | `day`; returns the Monday–Sunday week containing it |
 | `get_preferences` | No parameters |
@@ -277,6 +348,6 @@ jac check --app planner
 python3 -m unittest discover -s tests -v
 ```
 
-Tests use only Python's standard library plus Jac. They launch an isolated temporary project/database and test real HTTP authentication, isolation, recurrence/DST, overlaps, atomic travel moves, revisions, concurrent writes, work publication, and persistence after stopping/restarting the server.
+Tests use only Python's standard library plus Jac. They launch an isolated temporary project/database and test real HTTP authentication, isolation, recurrence/DST, overlaps, atomic travel moves, revisions, concurrent writes, work publication, and persistence after stopping/restarting the server. CLI integration tests execute real Jac commands against that isolated API, covering session permissions, task edits/completion, shared data, week previews, conflicts, class moves, weekend shifts, and invalid/DST times. Deletion tests cover revisions, user isolation, linked travel, preserved task sessions, single class occurrences, confirmation requirements, and persistence after restart.
 
-The remaining assignment milestones are native device verification and the CLI. Root `jac run` starts the implemented web UI and service.
+Native device packaging and verification are deferred for a later extra-credit enhancement. Root `jac run` starts the implemented web UI and service.

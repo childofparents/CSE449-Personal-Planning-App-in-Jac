@@ -27,6 +27,7 @@ class ServerTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[1]
         shutil.copytree(source / "core", cls.project / "core", ignore=shutil.ignore_patterns(".jac", "__pycache__"))
         shutil.copy(source / "jac.toml", cls.project / "jac.toml")
+        shutil.copytree(source / "cli", cls.project / "cli", ignore=shutil.ignore_patterns(".jac", "__pycache__"))
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
             cls.port = sock.getsockname()[1]
@@ -280,7 +281,7 @@ class ServerTests(unittest.TestCase):
         with urllib.request.urlopen(self.base + "/openapi.json") as response:
             paths = json.load(response)["paths"]
         endpoints = [p for p in paths if p.startswith("/function/") and "{" not in p]
-        self.assertEqual(len(endpoints), 20, endpoints)
+        self.assertEqual(len(endpoints), 21, endpoints)
         self.assertFalse(any(p.endswith(("/uuid4", "/deepcopy")) for p in endpoints))
         valid = dict(query="Hadley", session_token="qa-session", place_id="test-place", day="2026-09-14", title="Test", start="2026-09-14T20:00:00-04:00",
                      end="2026-09-14T21:00:00-04:00", task_id="unknown", block_id="unknown",
@@ -297,6 +298,137 @@ class ServerTests(unittest.TestCase):
         self.bad("validation", "place_map", place_id="https://example.com")
         task = self.good("create_task", title="Planner still works without Google")
         self.assertEqual(task["title"], "Planner still works without Google")
+
+    def cli(self, *args, ok=True, json_output=True, input_text=None, server=None):
+        env = os.environ.copy()
+        env.pop('CADENCE_TOKEN', None)
+        env.pop('CADENCE_SERVER', None)
+        env.pop('JAC_DB_URL', None)
+        env['CADENCE_CONFIG_DIR'] = str(self.project / ('cli-session-' + self.username))
+        command = ['jac', 'run', 'cli', '--', '--server', server or self.base]
+        if json_output:
+            command.append('--json')
+        proc = subprocess.run(command + list(args), cwd=self.project, env=env,
+                              input=input_text, text=True, capture_output=True, timeout=40)
+        self.assertEqual(proc.returncode, 0 if ok else 1, proc.stdout + proc.stderr)
+        if not json_output:
+            return proc.stdout
+        try:
+            body = json.loads(proc.stdout)
+        except ValueError:
+            self.fail(proc.stdout + proc.stderr)
+        self.assertEqual(body['ok'], ok, body)
+        return body['data'] if ok else body['error']
+
+    def cli_login(self):
+        result = self.cli('login', self.username, '--password-stdin', input_text='Test-password-927!\n')
+        self.assertNotIn('token', json.dumps(result))
+        path = self.project / ('cli-session-' + self.username) / 'session.json'
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn('Test-password', path.read_text())
+
+    def test_cli_shared_task_workflow(self):
+        self.assertEqual(self.cli('tasks', ok=False)['code'], 'auth')
+        self.cli_login()
+        task = self.cli('add', 'CLI study task', '--category', 'academics', '--minutes', '45')['task']
+        self.assertEqual(self.good('list_tasks')[0]['id'], task['id'])
+        short = task['id'][:12]
+        edited = self.cli('edit', short, '--title', 'CLI revised task')['task']
+        self.assertEqual(edited['revision'], 2)
+        self.assertEqual(self.cli('edit', short, '--revision', '1', '--minutes', '90', ok=False)['code'], 'stale_revision')
+        self.assertEqual(self.cli('tasks', '--search', 'no-such-task')['tasks'], [])
+        self.assertIn('CLI revised task', self.cli('tasks', json_output=False))
+        event = self.cli('schedule', short, '--start', '2026-09-19T10:00')['event']
+        self.assertEqual(event['task_id'], task['id'])
+        self.assertEqual(event['start'], '2026-09-19T14:00:00+00:00')
+        self.assertEqual(event['end'], '2026-09-19T14:45:00+00:00')
+        self.cli('done', short)
+        self.assertTrue(self.good('list_tasks')[0]['completed'])
+        self.cli('reopen', short)
+        current = self.good('list_tasks')[0]
+        self.good('complete_task', task_id=current['id'], expected_revision=current['revision'])
+        self.assertEqual(len(self.cli('tasks', '--state', 'done')['tasks']), 1)
+        self.cli('logout')
+        self.assertEqual(self.cli('week', '2026-09-19', ok=False)['code'], 'auth')
+
+    def test_cli_agenda_moves_shifts_and_errors(self):
+        self.cli_login()
+        week = self.cli('week', '2026-09-19')['agenda']
+        self.assertEqual(len(week['days']), 7)
+        self.assertEqual(week['days'][0]['date'], '2026-09-14')
+        text = self.cli('week', '2026-09-19', json_output=False)
+        for label in ['Monday', 'Sunday', 'America/Detroit', '13:30–15:20', 'CHRYS 133']:
+            self.assertIn(label, text)
+        event = self.cli('event', 'CLI focus', '--start', '2026-09-19T10:00', '--end', '2026-09-19T11:00')['event']
+        overlap = self.cli('event', 'Overlap', '--start', '2026-09-19T10:30', '--end', '2026-09-19T11:30', ok=False)
+        self.assertEqual(overlap['code'], 'overlap')
+        self.assertIn('CLI focus', json.dumps(overlap['details']))
+        moved = self.cli('move', event['id'], '--on', '2026-09-19', '--start', '2026-09-19T11:00', '--end', '2026-09-19T12:00')['event']
+        # move_block returns the moved activity and any atomically moved travel.
+        current = [b for b in self.good('get_day', day='2026-09-19')['days'][0]['blocks'] if b['id'] == event['id']][0]
+        self.assertEqual(current['start'], '2026-09-19T15:00:00+00:00')
+        self.cli('move', 'eecs449:2026-09-14', '--on', '2026-09-14', '--start', '2026-09-14T18:00', '--end', '2026-09-14T19:50')
+        self.assertEqual(len(self.good('list_occurrence_exceptions')), 1)
+        shift = self.cli('shift', '2026-09-20')['event']
+        self.assertEqual(shift['start'], '2026-09-20T20:30:00+00:00')
+        self.assertIn('Evergreen Plymouth', shift['location'])
+        self.assertTrue(self.cli('work', 'published', '2026-09-20')['work_week']['published'])
+        self.assertIn('warnings', self.cli('check', '2026-09-19')['agenda'])
+        for stamp in ['2026-03-08T02:30', '2026-11-01T01:30']:
+            self.assertEqual(self.cli('event', 'DST invalid', '--start', stamp, '--end', '2026-11-02T12:00', ok=False)['code'], 'validation')
+        self.assertEqual(self.cli('day', 'not-a-date', ok=False)['code'], 'validation')
+        self.assertEqual(self.cli('edit', 'unknown', '--minutes', '30', ok=False)['code'], 'id')
+        self.assertEqual(self.cli('add', 'bad minutes', '--minutes', '0', ok=False)['code'], 'validation')
+        self.assertEqual(self.cli('tasks', server='http://127.0.0.1:1', ok=False)['code'], 'auth')
+        self.assertEqual(self.cli('login', self.username, '--password-stdin', server='http://127.0.0.1:1', input_text='unused\n', ok=False)['code'], 'connection')
+
+    def test_deletion_preserves_sessions_and_checks_revisions(self):
+        task = self.good("create_task", title="Delete me")
+        block = self.block(task_id=task["id"])
+        self.bad("stale_revision", "remove_task", task_id=task["id"], expected_revision=0)
+        deleted = self.good("remove_task", task_id=task["id"], expected_revision=1)
+        self.assertEqual(deleted["preserved_block_ids"], [block["id"]])
+        self.assertEqual(self.good("list_tasks"), [])
+        saved = [b for b in self.good("get_day", day="2026-09-14")["days"][0]["blocks"] if b["id"] == block["id"]][0]
+        self.assertEqual(saved["task_id"], "")
+        self.assertEqual(saved["revision"], 2)
+        self.bad("not_found", "remove_task", task_id=task["id"], expected_revision=1)
+        self.bad("stale_revision", "remove_block", block_id=block["id"], expected_revision=1)
+        self.good("remove_block", block_id=block["id"], expected_revision=2)
+        self.assertNotIn(block["id"], [b["id"] for b in self.good("get_day", day="2026-09-14")["days"][0]["blocks"]])
+
+    def test_deletion_linked_travel_is_atomic_and_user_scoped(self):
+        task = self.good("create_task", title="Keep task")
+        block = self.block(task_id=task["id"], location="Library")
+        travel = self.block(title="Walk", category="travel", kind="travel", origin="Home", destination="Library", linked_to=block["id"], start="2026-09-14T17:20:00-04:00", end="2026-09-14T17:30:00-04:00")
+        self.bad("linked_travel", "remove_block", block_id=block["id"], expected_revision=1)
+        self.bad("stale_revision", "remove_block", block_id=block["id"], expected_revision=0, include_linked_travel=True)
+        original_token = self.token
+        self.setUp()
+        self.bad("not_found", "remove_block", block_id=block["id"], expected_revision=1, include_linked_travel=True)
+        self.bad("not_found", "remove_task", task_id=task["id"], expected_revision=1)
+        self.token = original_token
+        removed = self.good("remove_block", block_id=block["id"], expected_revision=1, include_linked_travel=True)
+        self.assertEqual(removed["removed_linked_travel_ids"], [travel["id"]])
+        self.assertEqual(len(self.good("list_tasks")), 1)
+        self.assertFalse(any(b["id"] in [block["id"], travel["id"]] for b in self.good("get_day", day="2026-09-14")["days"][0]["blocks"]))
+
+    def test_cli_deletion_confirmation_and_persistence(self):
+        self.cli_login()
+        task = self.cli("add", "Delete CLI test")["task"]
+        event = self.cli("schedule", task["id"], "--start", "2026-09-19T13:00")["event"]
+        self.assertEqual(self.cli("delete", "task", task["id"], ok=False)["code"], "validation")
+        self.cli("delete", "task", task["id"], "--yes")
+        self.assertEqual(self.cli("tasks")["tasks"], [])
+        self.cli("delete", "event", event["id"], "--on", "2026-09-19", "--yes")
+        self.assertEqual(self.cli("day", "2026-09-19")["agenda"]["days"][0]["blocks"], [])
+        self.cli("delete", "event", "eecs449:2026-09-14", "--on", "2026-09-14", "--yes")
+        self.assertNotIn("eecs449:2026-09-14", [b["id"] for b in self.good("get_day", day="2026-09-14")["days"][0]["blocks"]])
+        self.assertIn("eecs449:2026-09-16", [b["id"] for b in self.good("get_day", day="2026-09-16")["days"][0]["blocks"]])
+        type(self).stop()
+        type(self).start()
+        self.assertEqual(self.cli("tasks")["tasks"], [])
+        self.assertEqual(self.cli("day", "2026-09-19")["agenda"]["days"][0]["blocks"], [])
 
     def test_z_persistence_after_server_restart(self):
         task = self.good("create_task", title="Survives restart")

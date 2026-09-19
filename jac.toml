@@ -50,3 +50,7 @@ lucide-react-native = "^0.469.0"
 [apps.mobile.placement.pins]
 "mobile.*" = "client"
 "shared.*" = "client"
+
+[apps.cli]
+kind = "cli"
+entry-point = "cli.main"

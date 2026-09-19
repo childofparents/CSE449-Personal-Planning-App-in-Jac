@@ -61,6 +61,7 @@ def _state() -> Planner {
 def _ok(data: any) -> dict {
     return {"ok": True, "data": data, "error": None};
 }
+
 def _error(code: str, message: str, details: any = None) -> dict {
     return {
         "ok": False,
@@ -72,6 +73,7 @@ def _error(code: str, message: str, details: any = None) -> dict {
 def _revision(record: dict, expected: int) -> bool {
     return record["revision"] == expected;
 }
+
 def _now() -> str {
     return dt.datetime.now(dt.timezone.utc).isoformat();
 }
@@ -155,6 +157,31 @@ def update_task(task_id: str, expected_revision: int, changes: dict) -> dict {
     tasks[task_id] = item;
     state.tasks = tasks;
     return _ok(item);
+}
+
+def remove_task(task_id: str, expected_revision: int) -> dict {
+    state = _state();
+    old = state.tasks.get(task_id);
+    if old is None {
+        return _error("not_found", "Task not found");
+    }
+    if not _revision(old, expected_revision) {
+        return _error("stale_revision", "Reload the task before deleting", old);
+    }
+    # Preserve booked time; detach sessions so no dangling task IDs remain.
+    tasks = state.tasks.copy();
+    del tasks[task_id];
+    blocks = state.blocks.copy();
+    detached = [];
+    for (key, block) in blocks.items() {
+        if block["task_id"] == task_id {
+            blocks[key] = {** block, "task_id": "", "revision": block["revision"] + 1};
+            detached.append(key);
+        }
+    }
+    state.tasks = tasks;
+    state.blocks = blocks;
+    return _ok({"removed_id": task_id, "preserved_block_ids": detached});
 }
 
 def complete_task(task_id: str, expected_revision: int) -> dict {
@@ -348,7 +375,9 @@ def complete_block(
     return _ok(item);
 }
 
-def remove_block(block_id: str, expected_revision: int) -> dict {
+def remove_block(
+    block_id: str, expected_revision: int, include_linked_travel: bool = False
+) -> dict {
     state = _state();
     old = state.blocks.get(block_id);
     if old is None {
@@ -362,13 +391,19 @@ def remove_block(block_id: str, expected_revision: int) -> dict {
         for b in state.blocks.values()
         if b["linked_to"] == block_id
     ];
-    if linked {
-        return _error("linked_travel", "Remove linked travel first", linked);
+    if linked and include_linked_travel not in [True, "True"] {
+        return _error(
+            "linked_travel",
+            "Remove linked travel first or include it in deletion",
+            linked
+        );
     }
     blocks = state.blocks.copy();
-    del blocks[block_id];
+    for key in linked + [block_id] {
+        del blocks[key];
+    }
     state.blocks = blocks;
-    return _ok({"removed_id": block_id});
+    return _ok({"removed_id": block_id, "removed_linked_travel_ids": linked});
 }
 
 def get_preferences() -> dict {
@@ -674,6 +709,7 @@ def _read_days(day: str, count: int) -> dict {
 def get_day(day: str) -> dict {
     return _read_days(day, 1);
 }
+
 def get_week(day: str) -> dict {
     try {
         date = _date(day);
@@ -723,17 +759,37 @@ def _travel_verified(block: dict, daily: list) -> bool {
 
 # Authenticated optional place APIs shared with the native client.
 def search_places(query: str, session_token: str) -> dict {
-    try { return _ok(_search(query, session_token)); }
-    except ValueError as e { return _error("validation",str(e)); }
-    except Exception { return _error("places_unavailable","Google search is unavailable. Enter a location manually."); }
+    try {
+        return _ok(_search(query, session_token));
+    } except ValueError as e {
+        return _error("validation", str(e));
+    } except Exception {
+        return _error(
+            "places_unavailable",
+            "Google search is unavailable. Enter a location manually."
+        );
+    }
 }
+
 def select_place(place_id: str, session_token: str) -> dict {
-    try { return _ok(_select(place_id, session_token)); }
-    except ValueError as e { return _error("validation",str(e)); }
-    except Exception { return _error("places_unavailable","Google place details are unavailable."); }
+    try {
+        return _ok(_select(place_id, session_token));
+    } except ValueError as e {
+        return _error("validation", str(e));
+    } except Exception {
+        return _error("places_unavailable", "Google place details are unavailable.");
+    }
 }
+
 def place_map(place_id: str) -> dict {
-    try { return _ok(_map(place_id)); }
-    except ValueError as e { return _error("validation",str(e)); }
-    except Exception { return _error("places_unavailable","Google map is unavailable. Open the location in Maps instead."); }
+    try {
+        return _ok(_map(place_id));
+    } except ValueError as e {
+        return _error("validation", str(e));
+    } except Exception {
+        return _error(
+            "places_unavailable",
+            "Google map is unavailable. Open the location in Maps instead."
+        );
+    }
 }

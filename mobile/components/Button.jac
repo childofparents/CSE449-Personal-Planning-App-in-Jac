@@ -21,11 +21,14 @@ def:pub Button(
 
     variant_styles = {
         "primary": {backgroundColor: C.accent},
+        "danger": {backgroundColor: "#fff0f2", borderWidth: 1, borderColor: "#e6b9c3"},
         "secondary": {backgroundColor: C.surface, borderWidth: 1, borderColor: C.border}
     };
 
     label_styles = {
-        color: C.onAccent if variant == "primary" else C.text,
+        color: C.onAccent
+            if variant == "primary"
+            else "#a23146" if variant == "danger" else C.text,
         fontSize: F.md,
         fontWeight: "600"
     };
@@ -33,7 +36,7 @@ def:pub Button(
     <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityState={{"disabled":disabled}}
+        accessibilityState={{"disabled": disabled}}
         style={[base_styles, variant_styles[variant]]}
         onPress={onPress}
         disabled={disabled}
